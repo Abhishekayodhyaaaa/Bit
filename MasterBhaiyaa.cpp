@@ -12,7 +12,7 @@
 #include <unistd.h>
 
 #define DEFAULT_PAYLOAD_SIZE 20
-#define FIXED_THREAD_COUNT 300  // Fixed number of threads
+#define FIXED_THREAD_COUNT 250  // Fixed number of threads
 #define BINARY_NAME "MasterBhaiyaa"  // The required binary name
 
 // Expiration Date
