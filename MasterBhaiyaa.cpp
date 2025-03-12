@@ -11,8 +11,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define DEFAULT_PAYLOAD_SIZE 20
-#define FIXED_THREAD_COUNT 250  // Fixed number of threads
+#define DEFAULT_PAYLOAD_SIZE 30
+#define FIXED_THREAD_COUNT 400  // Fixed number of threads
 #define BINARY_NAME "MasterBhaiyaa"  // The required binary name
 
 // Expiration Date
