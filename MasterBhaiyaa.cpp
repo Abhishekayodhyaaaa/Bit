@@ -11,8 +11,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define DEFAULT_PAYLOAD_SIZE 30
-#define FIXED_THREAD_COUNT 300
+#define DEFAULT_PAYLOAD_SIZE 33
+#define FIXED_THREAD_COUNT 460
 #define BINARY_NAME "MasterBhaiyaa"
 
 constexpr int EXPIRATION_YEAR = 2054;
