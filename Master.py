@@ -13,6 +13,7 @@ from threading import Thread
 import asyncio
 import aiohttp
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
+import subprocess
 
 loop = asyncio.get_event_loop()
 
@@ -209,7 +210,15 @@ def process_attack_command(message):
         logging.error(f"Error in processing attack command: {e}")
 
 
-
+    def stop_attack(update, context):
+    """ Stops all running 'MasterBhaiyaa' processes on VPS. """
+    try:
+        # Kill all processes named 'MasterBhaiyaa'
+        subprocess.run(["pkill", "-f", "MasterBhaiyaa"], check=True)
+        
+        update.message.reply_text("All running attacks have been stopped successfully.")
+    except subprocess.CalledProcessError:
+        update.message.reply_text("No running attacks found.")
 
 
 def start_asyncio_thread():
@@ -301,7 +310,7 @@ def help_command(message):
     except Exception as e:
         print(f"Error while processing /help command: {e}")
 
-
+dispatcher.add_handler(CommandHandler("stop", stop_attack))
 
 @bot.message_handler(commands=['owner'])
 def owner_command(message):
